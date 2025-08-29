@@ -1,4 +1,4 @@
-name: Android NDK Build
+name: CMake on a single platform
 
 on:
   push:
@@ -8,34 +8,47 @@ on:
 
 env:
   BUILD_TYPE: Release
-  ANDROID_NDK_VERSION: 25.2.9519653
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    - name: Set up JDK
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
-
-    - name: Download Android SDK & NDK
-      uses: android-actions/setup-android@v3
-      with:
-        ndk-version: ${{ env.ANDROID_NDK_VERSION }}
-
-    - name: Configure CMake for Android
-      run: |
-        cmake -S app/src/main/cpp -B build \
-          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
-          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
-          -DANDROID_ABI=arm64-v8a \
-          -DANDROID_PLATFORM=android-21
+    - name: Configure CMake
+      run: cmake -S app/src/main/cpp -B build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
 
     - name: Build
       run: cmake --build build --config ${{env.BUILD_TYPE}}
+
+    - name: Test
+      working-directory: build
+      run: ctest -C ${{env.BUILD_TYPE}}
+
+    - name: Archive Build Output
+      run: |
+        mkdir -p artifacts
+        cp build/your_binary_name_here artifacts/
+        # Replace 'your_binary_name_here' with your actual output binary
+
+    - name: Create Release
+      if: github.ref == 'refs/heads/master'
+      id: create_release
+      uses: actions/create-release@v1
+      with:
+        tag_name: v${{ github.run_number }}
+        release_name: Release v${{ github.run_number }}
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Release Asset
+      if: github.ref == 'refs/heads/master'
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/your_binary_name_here
+        asset_name: your_binary_name_here
+        asset_content_type: application/octet-stream
